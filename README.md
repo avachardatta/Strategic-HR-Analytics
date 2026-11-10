@@ -1,84 +1,99 @@
-# 📊 Strategic HR Analytics: Enterprise Talent Retention & Risk Modeling
+# HR Attrition Analysis: Why Employees Leave and Who Is at Risk
 
-## 📝 Project Overview
-This project presents an enterprise-grade SQL framework built to solve workforce stabilization challenges using the **IBM HR Analytics dataset**. The objective is to transition human resources data from an unoptimized flat file into a normalized Relational Database Model (3NF) and build multi-layered diagnostic scripts. By tracking baseline attrition, evaluating structural burnout, mapping structural underpayment, and constructing an **Employee Flight-Risk Matrix**, this database acts as a predictive machine allowing People Operations to mitigate talent losses before they impact organizational revenue.
+PostgreSQL analysis of 1,470 employees (IBM HR Analytics dataset), written for the HR Head who needs to cut employee attrition.
 
----
+## 1. Business problem
 
-## 🎯 Project Objectives
-* **Database Normalization (3NF):** Deconstruct flat HR logs into 6 highly isolated, performance-tuned tables connected via declarative integrity constraints and foreign keys.
-* **Proactive Attrition Isolation:** Build structural indicators mapping historical attrition across granular demographic variables (Age, Role, Department).
-* **Burnout & Welfare Quantification:** Design diagnostic metrics cross-referencing systemic overtime patterns against qualitative performance evaluations and work-life balance scores.
-* **Predictive Risk Assessment:** Engineer a compound weighting algorithm (`Risk Score Matrix`) to classify active employee segments into clear, action-oriented prioritization rings.
-* **Executive Visibility Consolidation:** Synthesize complex data points into a single dashboard summary reporting key business metrics directly to C-suite stakeholders (CHRO/CEO).
+**Who is asking:** the HR Head (People Operations).
 
----
+**Problem statement:** 16.1% of employees (237 of 1,470) have left the company. The HR Head must decide where to spend the retention budget. Using employee, job, pay, experience and satisfaction data, find which groups leave most and which high performers are at risk, so HR can target retention actions where they cut attrition the most.
 
-## 🏗️ Project Structure
-The repository is systematically divided into a modular lifecycle designed for programmatic deployment:
-* **`/Schema_Setup`**: Data Definition Language (DDL) scripts building the foundational tables, primary indexes, and constraint links.
-* **`/Module_1_Retention_Engine`**: Quantitative queries evaluating the scale, reach, and velocity of historical talent drain.
-* **`/Module_2_Burnout_Red_Flag`**: Behavioral analytics measuring the long-term sustainability of production expectations vs employee health.
-* **`/Module_3_Financial_Gap_Analysis`**: Financial and promotional metrics isolating pay stagnation and progression bottlenecks.
-* **`/Module_4_Executive_HR_Analytics`**: The composite metrics engine calculating risk scores and serving up the master dashboard parameters.
+**Questions answered:**
+1. What is the overall attrition rate?
+2. Which departments, job roles, levels and age groups leave most?
+3. Does overtime make people leave? Does it improve performance?
+4. Which high performers are burned out, underpaid or waiting too long for promotion?
 
----
+## 2. Data
 
-## 🧹 Data Exploration & Cleaning
-Before designing the tables, an inspection of the raw flat data was conducted to eliminate structural anomalies:
-1. **Normalization Assessment:** The original dataset kept all metrics—from compensation to employee sentiment—on a single row. This was split into discrete entity zones (`employee`, `employee_performance`, `employee_compensation`, `employee_experience`, `employee_attrition`) to ensure zero operational redundancy.
-2. **Key Generation & Constraints:** The programmatic `employee_id` was mapped as the absolute Primary Key across all tables, establishing strict 1:1 matching rules for profile expansions.
-3. **Data Type Calibration:** Financial figures (`monthly_income`, `daily_rate`) were migrated to fixed-point `DECIMAL(10,2)` parameters to prevent rounding creep, while system flags were cleanly typed as standardized strings (`VARCHAR`) and integers.
+IBM HR Analytics dataset (public, fictional employees), split from one flat file into 6 related tables. Income has no currency in the source.
 
----
+| Table | Rows | Key columns |
+| --- | --- | --- |
+| dept.csv → `department` | 3 | dept_id, department |
+| emp.csv → `employee` | 1,470 | age, gender, marital status, job role, job level, overtime, business travel |
+| emp_attr.csv → `employee_attrition` | 1,470 | attrition (Yes/No) |
+| emp_compensation.csv → `employee_compensation` | 1,470 | monthly income, salary hike %, stock options |
+| emp_experience.csv → `employee_experience` | 1,470 | years at company, years in role, years since promotion |
+| emp_performance.csv → `employee_performance` | 1,470 | performance rating, job satisfaction, work-life balance |
 
-## 🔍 Data Analysis & Findings
+All tables join on `employee_id` (primary key); `employee.dept_id` links to `department`.
 
-### Module 1: The Retention Engine
-* **Overall Attrition:** Establishes the core organizational baseline attrition KPI, enabling macro-level volume tracking.
-* **Segmentation Realities:** Evaluates attrition behaviors across department silos, structural job levels, and custom age buckets (e.g., `18–25`, `26–35`). This isolates where tribal knowledge is leaving fastest.
+## 3. How I worked (7 steps)
 
-### Module 2: The Overtime & Burnout Red Flag
-* **Correlation Mapping:** Explicitly tracks whether intense overtime requirements actually generate superior output or if they simply collapse employee work-life balance vectors.
-* **Burnout Tracing:** Dynamically isolates active individuals maintaining maximum performance marks (`PerformanceRating = 4`) while showing high environmental strain and low work-life scores.
+1. **Define:** problem statement and questions above.
+2. **Collect:** loaded the IBM HR CSV.
+3. **Clean and model:** split the flat file into 6 tables (one subject per table) with primary and foreign keys, so each fact is stored once. Fixed a typo in the department name ("Human Resorces").
+4. **Explore:** counts, attrition by department, role and age group.
+5. **Analyze:** SQL with JOINs, GROUP BY, CASE (age buckets), subqueries (pay below company average) and business rules for burnout and promotion.
+6. **Visualize:** result tables below (dashboard is a next step).
+7. **Communicate:** insights and recommendations below.
 
-### Module 3: The Financial & Promotion Gap Analysis
-* **Equity Identification:** Isolates elite internal producers whose current base salaries sit under market standards (the company average).
-* **Stagnation Flags:** Pins down veteran workforce populations meeting optimal performance criteria but remaining trapped in identical roles and promotional cycles for 3 or more consecutive years.
+## 4. Key numbers
 
----
+| Group | Employees | Left | Attrition |
+| --- | --- | --- | --- |
+| **Whole company** | 1,470 | 237 | **16.1%** |
+| Works overtime | 416 | 127 | **30.5%** |
+| No overtime | 1,054 | 110 | 10.4% |
+| Job level 1 (entry) | 543 | 143 | **26.3%** |
+| First 2 years at company | 342 | 102 | **29.8%** |
+| 10+ years at company | 246 | 20 | 8.1% |
+| Age 18–25 | 123 | 44 | **35.8%** |
+| Single | 470 | 120 | 25.5% |
+| Travels frequently | 277 | 69 | 24.9% |
+| Sales Representative | 83 | 33 | **39.8%** |
+| Laboratory Technician | 259 | 62 | 23.9% |
+| Sales department | 446 | 92 | 20.6% |
+| R&D department | 961 | 133 | 13.8% |
 
-## 💡 Strategic Business Insights
+## 5. Insights
 
-### 1. The Retention Engine Insights
-* **Finding:** Attrition rates vary drastically across specific operational nodes, heavily impacting lower tenure brackets and specific job functions.
-* **Business Recommendation:** Standardize structural "Stay Interviews" at critical retention milestones (12 and 24 months) and modernise onboarding programs within high-turnover business units.
+1. **Overtime is the strongest warning sign.** People on overtime leave **3x more** (30.5% vs 10.4%) and make up **54% of all leavers**. Overtime does **not** raise performance (average rating 3.16 vs 3.15), so the company pays the cost without the benefit.
+2. **Attrition is an early-career problem.** Job level 1 loses 26.3% and makes up **60% of all leavers**. Employees in their first 2 years leave at 29.8%, against 8.1% after 10 years. Entry-level staff on overtime leave at **52.6%**.
+3. **Pay matters.** Median monthly income of leavers is **3,202 vs 5,204** for those who stayed.
+4. **Two roles need urgent attention:** Sales Representatives (39.8%) and Laboratory Technicians (23.9%).
+5. **High performers at risk can be named.** 155 top-rated employees (rating 4) earn below the company average, and 32 of them (20.6%) have already left. 57 top performers have waited 3+ years for promotion. 24 top performers work overtime with low work-life balance (7 of them left).
 
-### 2. The Overtime & Burnout Red Flag Insights
-* **Finding:** Sustained overtime displays an inverse relationship with long-term retention, acting as a leading indicator of turnover among top performers.
-* **Business Recommendation:** Deploy automated manager warnings when high-performers run continuous overtime streaks, and couple these with rotating wellness incentives to safeguard institutional memory.
+**One finding that surprised me:** overtime workers rate their work-life balance almost the same as others (2.73 vs 2.77 out of 4), yet they leave 3x more. The survey score alone would hide this risk.
 
-### 3. The Financial & Promotion Gap Analysis Insights
-* **Finding:** Compounding promotion delays alongside salary compression acts as a primary vector driving talent straight into competitor pipelines.
-* **Business Recommendation:** Implement bi-annual salary adjustment sweeps targeting individuals flagged in the stagnation index to normalize compensation equity against market standards.
+## 6. Recommendations
 
----
+| Action | Why (the number) | What to watch |
+| --- | --- | --- |
+| Cap regular overtime and review teams where it is routine | overtime staff leave 3x more with no performance gain | overtime hours and attrition by team, monthly |
+| Strengthen onboarding and check-ins in the first 2 years, starting with level 1 | level 1 = 60% of leavers; 29.8% leave in the first 2 years | 12-month and 24-month retention of new joiners |
+| Review pay for the 155 top performers below average income | 20.6% of them have already left | attrition of rating-4 employees |
+| Run a focused review of Sales Representative and Lab Technician roles | 39.8% and 23.9% attrition | attrition in these roles each quarter |
+| Fast-track promotion decisions for the 57 high performers waiting 3+ years | long waits risk losing proven people | promotions made, and attrition in this group |
 
-## 📊 System Generated Reports
+## 7. Executive summary
 
-### 1. Employee Risk Profile Matrix (Module 4)
-This programmatic engine assigns specific risk points (+1 per hazard) across 5 core corporate warning markers:
-* **Risk Score 5 (Critical Risk):** Requires immediate HR intervention. Identifies top-tier employees suffering from simultaneous underpayment, promotion delay, intense overtime, and poor work-life balance.
-* **Risk Score 3–4 (High Risk):** Requires localized manager mitigation plans before escalating to critical flight paths.
+The company loses 16.1% of employees. Most leavers are early-career (level 1 = 60% of leavers) and many work overtime (3x attrition, no performance gain). **Recommendation:** cap routine overtime and invest in the first 2 years of the employee journey; then review pay for the 155 underpaid top performers.
 
-### 2. Executive HR Dashboard Summary (Module 4)
-A high-efficiency, single-query executive dashboard designed to report macro organizational health to the CHRO. It surfaces six business-critical values instantly:
+## 8. Files
 
-| Core Business Metric | KPI Purpose |
-| :--- | :--- |
-| `total_employees` | Current absolute headcount baseline. |
-| `attrition_rate_pct` | Macro historical turnover rate. |
-| `promotion_ready_employees` | High-performing talent pipeline primed for upskilling. |
-| `burnout_employees` | The volume of active staff running high operational friction. |
-| `high_financial_risk_employees` | High performers vulnerable to market poaching due to low pay. |
-| `critical_risk_employees` | Total active staff meeting all five flight-risk variables. |
+```
+analytics_queries.sql   # table creation (DDL) + all analysis queries
+dept.csv, emp*.csv      # the 6 tables' data
+```
+
+Load order: create tables from `analytics_queries.sql`, import the CSVs (department first, then employee, then the other 4), then run the queries.
+
+## 9. Limitations and next steps
+
+- One snapshot in time, so I can't see *when* people left or trends over time.
+- The dataset is fictional and small (1,470 employees); results show patterns, not proof of cause.
+- Next: build an employee risk score (overtime + low pay + no promotion + low work-life balance) and a Power BI dashboard.
+
+**Tools:** PostgreSQL (JOINs, GROUP BY, CASE, subqueries), Excel/CSV.
